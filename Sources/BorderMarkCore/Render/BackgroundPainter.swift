@@ -1,5 +1,5 @@
 import CoreGraphics
-import CoreImage
+@preconcurrency import CoreImage
 
 enum BackgroundPainter {
     /// 模糊和取色都在缩小后的图上做：结果肉眼无差别，速度和内存好很多。
