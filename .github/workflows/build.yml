@@ -21,13 +21,10 @@ jobs:
       - name: Bundle
         run: ./scripts/bundle.sh "${GITHUB_REF_NAME#v}"
 
-      - name: Zip
-        run: ditto -c -k --keepParent "build/边框水印大师.app" BorderMark-macOS.zip
-
       - name: Disk image
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           version="${GITHUB_REF_NAME#v}"
+          version="${version//\//-}"
           app_name="边框水印大师"
           staging="build/dmg-staging"
           rm -rf "$staging"
@@ -45,12 +42,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BorderMark-macOS
-          path: BorderMark-macOS.zip
-
-      - uses: actions/upload-artifact@v4
-        if: startsWith(github.ref, 'refs/tags/v')
-        with:
           name: BorderMark-dmg
           path: BorderMark-*.dmg
 
@@ -63,23 +54,21 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: BorderMark-*
-          merge-multiple: true
+          name: BorderMark-dmg
           path: dist
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" dist/* \
+          gh release create "$GITHUB_REF_NAME" "dist/BorderMark-${version}.dmg" \
+            --repo "$GH_REPO" \
             --title "边框水印大师 ${version}" \
             --notes "$(cat <<EOF
-          macOS 安装包，当前为 ad-hoc 签名，未做公证。
+          macOS 安装包是 \`BorderMark-${version}.dmg\`。打开后把「边框水印大师」拖到「应用程序」。
 
-          - \`BorderMark-macOS.zip\`：解压后打开「边框水印大师」
-          - \`BorderMark-${version}.dmg\`：打开后把应用拖到「应用程序」
-
-          如果系统拦截，到「系统设置 → 隐私与安全性」里允许打开。
+          当前为 ad-hoc 签名，未做公证。如果系统拦截，到「系统设置 → 隐私与安全性」里允许打开。
           EOF
           )"
