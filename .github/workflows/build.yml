@@ -1,0 +1,30 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test
+        run: ./scripts/test.sh
+
+      - name: Bundle
+        run: ./scripts/bundle.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Zip
+        run: ditto -c -k --keepParent "build/边框水印大师.app" BorderMark-macOS.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BorderMark-macOS
+          path: BorderMark-macOS.zip
