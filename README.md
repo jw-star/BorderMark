@@ -2,6 +2,16 @@
 
 给照片加边框和拍摄参数水印的 macOS 应用。SwiftUI + 系统框架，无第三方依赖。
 
+## 运行效果
+
+打开一张带拍摄信息的照片后，中间是水印预览，右侧选择模式。下面是默认的「毛玻璃卡片」：模糊背景、圆角阴影，底部是品牌 Logo、机型和参数。
+
+![主界面：照片预览与水印模式](docs/screenshots/main.png)
+
+同一张预览下，侧栏往下是「调整」：边框宽度、文字大小、背景、阴影、字体，以及是否显示品牌 Logo。
+
+![调整边框、文字和 Logo](docs/screenshots/adjustments.png)
+
 ## 运行
 
 只需要 Command Line Tools（或完整 Xcode），macOS 14 以上。
