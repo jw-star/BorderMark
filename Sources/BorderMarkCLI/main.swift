@@ -140,7 +140,9 @@ func run(_ arguments: [String]) throws {
         let written = try TemplateStore.exportBuiltins(to: directory)
         print("已写入 \(written) 个模板到 \(directory.path)")
     case "logos":
-        for entry in LogoLibrary.allEntries() { print("\(entry.name)\t\(entry.url.path)") }
+        for brand in LogoLibrary.brands(from: LogoLibrary.allEntries()) {
+            for entry in brand.variants { print("\(brand.name)\t\(entry.variantName)\t\(entry.url.path)") }
+        }
     case "sample":
         guard let path = rest.first else { throw CLIError.usage("sample 需要输出路径") }
         try SampleImage.write(to: URL(fileURLWithPath: path))

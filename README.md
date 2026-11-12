@@ -40,13 +40,20 @@ Sources/BorderMarkApp    SwiftUI 界面
 Sources/BorderMarkCLI    命令行工具
 ```
 
-## 界面里能调的
+## 界面
 
-- **调整**：边框宽度、文字大小、背景、文字颜色、圆角、阴影、字体、文字粗细、Logo 及其颜色。标题旁的“重置默认”一键恢复。
-- **文字行**：当前模式的每一行文字都能直接改，或从预设（完整相机名、机型、镜头、参数、时间……）里选；每个模式各记各的。
-- **文字内容**：署名、自定义文字，以及没有 EXIF 时手动填写的拍摄信息。
-- **导出**：面板底部的“导出当前”和“批量导出”按钮，默认质量 100。导出时弹窗显示进度，可取消；结束后显示成功、失败数量，并可直接在访达中打开。默认模式是毛玻璃卡片。
-- **Logo 位置**：经典白底/黑底、画廊白框、毛玻璃卡片、主色卡片、渐变海报带 Logo；其余模式没有 Logo 位置，界面会提示。
+左侧照片列表，中间预览，右侧面板按功能分成五页，每页的参数分卡片放：
+
+| 页 | 内容 |
+|---|---|
+| 模式 | 水印模式缩略图；自定义模式（JSON）的管理 |
+| 样式 | 边框与照片（宽度、圆角、阴影）、背景、文字样式（大小、字体、粗细、颜色） |
+| Logo | 来源与样式、颜色、Logo 文件 |
+| 文字 | 每一行显示什么、署名与附言、手动填写的拍摄信息 |
+| 导出 | 格式与质量 |
+
+面板顶部的“重置默认”恢复所有默认值（署名等已输入的文字保留）；底部固定“导出当前”和“批量导出”按钮，
+导出时弹窗显示进度，可取消。默认模式是毛玻璃卡片，导出质量默认 100。
 
 ## 自定义水印模式
 
@@ -106,17 +113,25 @@ Sources/BorderMarkCLI    命令行工具
 界面“调整”里可以选：
 
 - **自动匹配相机品牌**（默认）：按每张照片 EXIF 的厂商字段找同名 Logo，批量导出时不同相机各用各的。
-- **仅品牌名文字**、**指定某个品牌**、**自选一张图片**。
+- **仅品牌名文字**、**指定某个品牌**（有多种样式的品牌是子菜单）、**自选一张图片**。
+- **多种样式**：文件名 `Nikon.png` 是品牌默认 Logo，`Nikon-黄标.png`、`Leica-红标.png` 这样加 `-样式名` 的是同品牌的其他样式。
+  在 Logo 页选了某个品牌的样式后会记住，之后自动匹配到这个品牌都用它，批量导出时不同相机各用各的。
 - **Logo 颜色**：跟随文字（默认）、自定义颜色，或保留图片原色（彩色 Logo 用这个）。前两项只对透明底的 Logo 生效。
 
 图片来源：
 
-- Apple、DJI、FUJIFILM、Google、HUAWEI、Leica、Nikon、OPPO、Panasonic、SAMSUNG、SONY、vivo、Xiaomi：
-  取自 [Simple Icons](https://simpleicons.org) 16.37.0（文件为 CC0-1.0），用 `scripts/svg-to-logo.swift` 转成透明底 PNG。
-- Canon、HASSELBLAD、OLYMPUS、OM SYSTEM、PENTAX、RICOH、SIGMA：Simple Icons 未收录，
-  暂用 `scripts/make-wordmark-logos.swift` 生成的品牌名字标。
+- 单色默认样式：Apple、DJI、FUJIFILM、Google、HUAWEI、Leica、Nikon、OPPO、Panasonic、SAMSUNG、SONY、vivo、Xiaomi
+  取自 [Simple Icons](https://simpleicons.org) 16.37.0（CC0-1.0）；Canon、HASSELBLAD、OLYMPUS、PENTAX、SIGMA
+  取自[维基共享资源](https://commons.wikimedia.org)（标注为公有领域）。
+- 彩色样式（`品牌-彩色.png`）：Canon、FUJIFILM、Google、Leica、Nikon、OLYMPUS、OM SYSTEM、OPPO、Panasonic、
+  PENTAX、RICOH、SAMSUNG、SIGMA、vivo、Xiaomi，取自维基共享资源（标注为公有领域）。另有 `HUAWEI-字标.png`。
+- OM SYSTEM、RICOH 的单色默认样式仍是 `scripts/make-wordmark-logos.swift` 生成的品牌名字标。
+- SVG 用 `scripts/svg-to-logo.swift` 转成透明底 PNG。
 
-各品牌 Logo 是其所有者的商标，CC0 只覆盖图标文件本身。自用没有问题；公开分发或上架前请自行确认商标使用是否合规。
+**彩色样式只在 Logo 颜色选“原色”时出现**：切到原色后自动换成彩色样式，也可以在样式下拉里改回单色；
+“跟随文字 / 自定义”两种染色模式下只列出单色样式。两种模式下选的样式分别记住。
+
+各品牌 Logo 是其所有者的商标，CC0 / 公有领域只说明图片文件本身没有版权限制。自用没有问题；公开分发或上架前请自行确认商标使用是否合规。
 
 要替换或补充：把以品牌命名的透明底 PNG（如 `Canon.png`）放进
 `~/Library/Application Support/BorderMark/Logos/`（界面里点“Logo 文件夹”），同名会替换自带的；

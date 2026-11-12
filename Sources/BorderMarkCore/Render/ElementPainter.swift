@@ -5,8 +5,13 @@ import Foundation
 struct ElementPainter {
     /// 品牌名文字代替 Logo 时，字号相对 Logo 高度的比例
     private static let brandTextRatio: CGFloat = 0.72
-    /// Logo 宽度最多是高度的几倍
+    /// 单色 Logo 宽度最多是高度的几倍。再宽就整体缩小，免得挤占旁边的文字。
     private static let maxLogoAspect: CGFloat = 4.5
+    /// 彩色字标（Panasonic、SAMSUNG 这类）允许更宽，否则会被缩得比旁边的相机名矮一截。
+    private static let colorLogoAspect: CGFloat = 6.8
+    /// 接近正方形的彩色徽章（黄标、红标）图形在方块里面，按方块高度画会显得小。
+    private static let compactColorAspect: CGFloat = 1.35
+    private static let compactColorScale: CGFloat = 1.85
     /// 直接压在照片上的文字加一点投影，保证亮背景上也看得清
     private static let overlayShadowBlurRatio: CGFloat = 0.008
     private static let overlayShadowOffsetRatio: CGFloat = 0.002
@@ -221,12 +226,47 @@ struct ElementPainter {
         )
     }
 
-    /// 按给定高度等比缩放；特别长的字标（如 Panasonic）限制最大宽度，整体等比缩小，免得挤占旁边的文字。
+    /// 按给定高度等比缩放。彩色长字标放宽宽度上限；彩色方块徽章略放大。
     static func logoSize(for logo: CGImage, height: CGFloat) -> CGSize {
-        let aspect = CGFloat(logo.width) / CGFloat(logo.height)
-        guard aspect > maxLogoAspect else { return CGSize(width: height * aspect, height: height) }
-        let width = height * maxLogoAspect
+        let aspect = CGFloat(logo.width) / CGFloat(max(logo.height, 1))
+        let ink = inkStats(logo)
+        var target = height
+        if ink.colorful && ink.coverage > 0.85 && aspect <= compactColorAspect {
+            target *= compactColorScale
+        }
+        let cap = ink.colorful ? colorLogoAspect : maxLogoAspect
+        guard aspect > cap else { return CGSize(width: target * aspect, height: target) }
+        let width = target * cap
         return CGSize(width: width, height: width / aspect)
+    }
+
+    /// 缩小后看有没有明显的彩色像素，以及不透明像素占画面的比例。
+    private static func inkStats(_ image: CGImage) -> (colorful: Bool, coverage: CGFloat) {
+        let side = 32
+        let bytesPerRow = side * 4
+        let data = UnsafeMutableRawPointer.allocate(byteCount: side * bytesPerRow, alignment: 16)
+        defer { data.deallocate() }
+        guard let context = CGContext(
+            data: data, width: side, height: side, bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return (false, 1) }
+        context.interpolationQuality = .low
+        context.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
+
+        let bytes = data.bindMemory(to: UInt8.self, capacity: side * bytesPerRow)
+        var opaque = 0
+        var chromatic = 0
+        for index in stride(from: 0, to: side * bytesPerRow, by: 4) {
+            guard bytes[index + 3] > 16 else { continue }
+            opaque += 1
+            let red = Int(bytes[index])
+            let green = Int(bytes[index + 1])
+            let blue = Int(bytes[index + 2])
+            if max(red, green, blue) - min(red, green, blue) > 40 { chromatic += 1 }
+        }
+        guard opaque > 0 else { return (false, 0) }
+        return (CGFloat(chromatic) / CGFloat(opaque) > 0.015, CGFloat(opaque) / CGFloat(side * side))
     }
 
     /// "NIKON CORPORATION" → "NIKON"，"Apple" → "APPLE"

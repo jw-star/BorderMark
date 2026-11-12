@@ -1,4 +1,4 @@
-// 把单色 SVG 图标转成透明底 PNG，并裁掉四周的透明留白。
+// 把 SVG Logo 转成透明底 PNG（保留原有颜色），并裁掉四周的透明留白。
 // 用法：swift scripts/svg-to-logo.swift <输入.svg> <输出.png>
 import AppKit
 
@@ -21,8 +21,16 @@ guard let canvas = CGContext(
     space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
 ) else { fail("无法创建画布") }
 
+// 按 SVG 自身宽高比缩放进画布，不拉伸（宽幅字标如 Canon 的 viewBox 不是正方形）
+let svgSize = svg.size.width > 0 && svg.size.height > 0 ? svg.size : CGSize(width: 1, height: 1)
+let fit = CGFloat(renderSide) / max(svgSize.width, svgSize.height)
+let drawSize = CGSize(width: svgSize.width * fit, height: svgSize.height * fit)
+let drawRect = CGRect(
+    x: (CGFloat(renderSide) - drawSize.width) / 2, y: (CGFloat(renderSide) - drawSize.height) / 2,
+    width: drawSize.width, height: drawSize.height
+)
 NSGraphicsContext.current = NSGraphicsContext(cgContext: canvas, flipped: false)
-svg.draw(in: CGRect(x: 0, y: 0, width: renderSide, height: renderSide))
+svg.draw(in: drawRect)
 NSGraphicsContext.current = nil
 
 // 找出不透明像素的包围盒

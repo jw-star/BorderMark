@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     private static let photoListWidth: CGFloat = 200
-    private static let inspectorWidth: CGFloat = 330
+    private static let inspectorWidth: CGFloat = 350
 
     @EnvironmentObject private var state: AppState
 

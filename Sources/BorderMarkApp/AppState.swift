@@ -8,8 +8,8 @@ enum LogoChoice: Hashable {
     case auto
     /// 不用图片，用品牌名文字
     case text
-    /// 指定 Logo 库里的某一张
-    case library(String)
+    /// 所有照片都用指定品牌的 Logo（值为品牌键），样式按该品牌的偏好
+    case brand(String)
     /// 用户临时选的一张图片
     case custom
 }
@@ -42,6 +42,7 @@ final class AppState: ObservableObject {
     private static let maxConcurrentExports = 3
     private static let openEnvironmentKey = "BORDERMARK_OPEN"
     private static let logoEnvironmentKey = "BORDERMARK_LOGO"
+    private static let logoPreferencesKey = "logoVariantPreferences"
     private static let exportEnvironmentKey = "BORDERMARK_EXPORT_TO"
     private static let defaultTemplateID = "blur-card"
     private static let defaultExportFormat = ExportFormat.jpeg
@@ -74,7 +75,16 @@ final class AppState: ObservableObject {
             scheduleThumbnails()
         }
     }
-    @Published private(set) var logoLibrary: [LogoEntry] = []
+    @Published private(set) var logoBrands: [LogoBrand] = []
+    /// 每个品牌偏好的 Logo 样式：品牌键 → 样式 id。会保存下来，下次打开仍然有效。
+    @Published private(set) var logoPreferences: [String: String] = [:] {
+        didSet {
+            guard logoPreferences != oldValue else { return }
+            UserDefaults.standard.set(logoPreferences, forKey: Self.logoPreferencesKey)
+            schedulePreview()
+            scheduleThumbnails()
+        }
+    }
     @Published private(set) var customLogoName: String?
     private var customLogo: CGImage?
     private var logoCache: [URL: CGImage] = [:]
@@ -107,6 +117,7 @@ final class AppState: ObservableObject {
     private var thumbnailTask: Task<Void, Never>?
 
     init() {
+        logoPreferences = UserDefaults.standard.dictionary(forKey: Self.logoPreferencesKey) as? [String: String] ?? [:]
         reloadLogos()
         reloadTemplates()
         // 调试用：`BORDERMARK_OPEN=/a.jpg:/b.jpg` 启动即导入。
@@ -114,9 +125,9 @@ final class AppState: ObservableObject {
         let launchPaths = ProcessInfo.processInfo.environment[Self.openEnvironmentKey]?.split(separator: ":") ?? []
         if !launchPaths.isEmpty { importPhotos(launchPaths.map { URL(fileURLWithPath: String($0)) }) }
         // 调试用：`BORDERMARK_LOGO=sony` 启动即指定 Logo，和在下拉菜单里选择走同一条路径
-        if let logoID = ProcessInfo.processInfo.environment[Self.logoEnvironmentKey],
-           logoLibrary.contains(where: { $0.id == logoID }) {
-            logoChoice = .library(logoID)
+        if let brandID = ProcessInfo.processInfo.environment[Self.logoEnvironmentKey],
+           logoBrands.contains(where: { $0.id == brandID }) {
+            logoChoice = .brand(brandID)
         }
     }
 
@@ -218,9 +229,9 @@ final class AppState: ObservableObject {
     }
 
     func reloadLogos() {
-        logoLibrary = LogoLibrary.allEntries()
+        logoBrands = LogoLibrary.brands(from: LogoLibrary.allEntries())
         logoCache = [:]
-        if case .library(let id) = logoChoice, !logoLibrary.contains(where: { $0.id == id }) {
+        if case .brand(let id) = logoChoice, !logoBrands.contains(where: { $0.id == id }) {
             logoChoice = .auto
         }
         schedulePreview()
@@ -268,13 +279,56 @@ final class AppState: ObservableObject {
             return nil
         case .custom:
             return customLogo
-        case .library(let id):
-            return image(for: logoLibrary.first { $0.id == id })
+        case .brand, .auto:
+            return image(for: logoBrand(for: metadata).map(preferredEntry))
+        }
+    }
+
+    /// 某张照片当前对应的品牌：指定品牌时就是它，自动模式按照片的厂商字段（手填的优先）匹配。
+    func logoBrand(for metadata: PhotoMetadata) -> LogoBrand? {
+        switch logoChoice {
+        case .text, .custom:
+            return nil
+        case .brand(let id):
+            return logoBrands.first { $0.id == id }
         case .auto:
             let override = options.fieldOverrides["Make"]?.trimmingCharacters(in: .whitespaces) ?? ""
             let make = override.isEmpty ? metadata.make : override
-            return image(for: LogoLibrary.match(make: make, in: logoLibrary))
+            return LogoLibrary.matchBrand(make: make, in: logoBrands)
         }
+    }
+
+    /// 当前照片对应的品牌，界面上用来显示和切换它的样式。
+    var currentLogoBrand: LogoBrand? {
+        selectedPhoto.flatMap { logoBrand(for: $0.metadata) } ?? {
+            if case .brand(let id) = logoChoice { return logoBrands.first { $0.id == id } }
+            return nil
+        }()
+    }
+
+    /// “原色”模式：Logo 保留图片本身的颜色，这时才提供彩色样式。
+    var isLogoOriginalColor: Bool { !options.isLogoTinted }
+
+    /// 当前颜色模式下这个品牌可选的样式
+    func availableVariants(for brand: LogoBrand) -> [LogoEntry] {
+        brand.variants(isOriginalColor: isLogoOriginalColor)
+    }
+
+    func preferredEntry(for brand: LogoBrand) -> LogoEntry {
+        let key = LogoLibrary.preferenceKey(brandID: brand.id, isOriginalColor: isLogoOriginalColor)
+        return brand.entry(preferring: logoPreferences[key], isOriginalColor: isLogoOriginalColor)
+    }
+
+    /// 记住某个品牌在当前颜色模式下用哪种样式。
+    func setPreferredVariant(_ entry: LogoEntry) {
+        let key = LogoLibrary.preferenceKey(brandID: entry.brandID, isOriginalColor: isLogoOriginalColor)
+        logoPreferences = logoPreferences.merging([key: entry.id]) { _, new in new }
+    }
+
+    /// 在菜单里选了某个品牌的某个样式：所有照片都用这个品牌，并记住这个样式。
+    func chooseBrandLogo(_ entry: LogoEntry) {
+        setPreferredVariant(entry)
+        logoChoice = .brand(entry.brandID)
     }
 
     private func image(for entry: LogoEntry?) -> CGImage? {
@@ -293,6 +347,7 @@ final class AppState: ObservableObject {
         )
         lineOverrides = [:]
         logoChoice = .auto
+        logoPreferences = [:]
         exportFormat = Self.defaultExportFormat
         exportQuality = Self.defaultExportQuality
         status = "已恢复默认参数"

@@ -3,8 +3,9 @@
 // 用法：swift scripts/make-wordmark-logos.swift <输出目录>
 import AppKit
 
-// 只生成 Simple Icons 里没有的品牌；其余品牌的官方图标由 svg-to-logo.swift 从 Simple Icons 转换而来。
-let brands = ["Canon", "HASSELBLAD", "OLYMPUS", "OM Digital", "PENTAX", "RICOH", "SIGMA"]
+// 只生成没有可用官方矢量图的品牌（OM SYSTEM 的官方图是带底色的方块、RICOH 的带标语，都不适合染色）；
+// 其余品牌的 Logo 来自 Simple Icons 和维基共享资源，见 README。
+let brands = ["OM Digital", "RICOH"]
 let height: CGFloat = 160
 let padding: CGFloat = 8
 
