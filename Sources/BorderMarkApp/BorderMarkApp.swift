@@ -29,6 +29,18 @@ struct BorderMarkApp: App {
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                     .disabled(state.photos.isEmpty)
             }
+            CommandMenu("预览") {
+                Button(state.isFullScreenPreview ? "退出全屏预览" : "全屏预览") { state.toggleFullScreenPreview() }
+                    .keyboardShortcut("f", modifiers: [.command, .control])
+                    .disabled(state.selectedPhoto == nil)
+                Divider()
+                Button("上一张") { state.selectPreviousPhoto() }
+                    .keyboardShortcut("[", modifiers: .command)
+                    .disabled(state.photos.count < 2)
+                Button("下一张") { state.selectNextPhoto() }
+                    .keyboardShortcut("]", modifiers: .command)
+                    .disabled(state.photos.count < 2)
+            }
         }
     }
 }

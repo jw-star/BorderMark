@@ -38,6 +38,8 @@ struct ExportReport: Equatable {
 @MainActor
 final class AppState: ObservableObject {
     private static let previewDebounce = Duration.milliseconds(40)
+    /// 参数停下多久后开始渲染原图画质
+    private static let fullResolutionDelay = Duration.milliseconds(350)
     private static let thumbnailDebounce = Duration.milliseconds(300)
     private static let maxConcurrentExports = 3
     private static let openEnvironmentKey = "BORDERMARK_OPEN"
@@ -46,12 +48,17 @@ final class AppState: ObservableObject {
     private static let exportEnvironmentKey = "BORDERMARK_EXPORT_TO"
     private static let defaultTemplateID = "blur-card"
     private static let defaultExportFormat = ExportFormat.jpeg
-    static let defaultLogoColor = "#000000"
+    /// 选「自定义」时还没有具体颜色，就用白色。默认不写入这个颜色，以免盖住模板自带的 Logo 色。
+    static let defaultLogoColor = "#FFFFFF"
     private static let defaultExportQuality = 1.0
 
     @Published private(set) var photos: [PhotoItem] = []
     @Published var selectedPhotoID: PhotoItem.ID? {
-        didSet { if selectedPhotoID != oldValue { reloadSelectedSources() } }
+        didSet {
+            guard selectedPhotoID != oldValue else { return }
+            reloadSelectedSources()
+            FocusReset.clear()
+        }
     }
 
     @Published private(set) var templates: [Template] = BuiltinTemplates.all
@@ -60,7 +67,7 @@ final class AppState: ObservableObject {
         didSet { if selectedTemplateID != oldValue { schedulePreview() } }
     }
 
-    @Published var options = RenderOptions(logoColor: AppState.defaultLogoColor, author: NSFullUserName()) {
+    @Published var options = RenderOptions(author: NSFullUserName()) {
         didSet {
             guard options != oldValue else { return }
             schedulePreview()
@@ -103,6 +110,23 @@ final class AppState: ObservableObject {
 
     @Published var exportFormat = AppState.defaultExportFormat
     @Published var exportQuality = AppState.defaultExportQuality
+    @Published var isFullScreenPreview = false
+    /// 全屏预览里是否按原图 100% 像素显示
+    @Published var isActualSizePreview = false
+    /// 按原图分辨率渲染的成品。参数一停下就生成，生成好之前先显示快速预览。
+    @Published private(set) var fullResolutionPreview: CGImage?
+    private var fullResolutionTask: Task<Void, Never>?
+    /// 当前照片按原图分辨率解码的结果，调参数时反复使用，不必每次重新解码
+    private var fullResolutionSource: (url: URL, image: CGImage)?
+
+    /// 界面上显示的成品：有原图画质的就用它，否则用快速预览
+    var displayPreview: CGImage? { fullResolutionPreview ?? preview }
+    var isShowingFullResolution: Bool { fullResolutionPreview != nil }
+    /// 进入全屏预览时是否顺带把窗口切成了系统全屏（退出时据此切回）
+    var didEnterSystemFullScreen = false
+    private var keyMonitor: Any?
+    private var windowObserver: NSObjectProtocol?
+
     @Published private(set) var exportPhase = ExportPhase.idle
     @Published private(set) var exportReport = ExportReport()
     private var exportTask: Task<Void, Never>?
@@ -117,6 +141,9 @@ final class AppState: ObservableObject {
     private var thumbnailTask: Task<Void, Never>?
 
     init() {
+        keyMonitor = PhotoKeyboard.install(for: self)
+        windowObserver = FocusReset.observeWindowActivation()
+        KeyboardSelfTest.runIfRequested(state: self)
         logoPreferences = UserDefaults.standard.dictionary(forKey: Self.logoPreferencesKey) as? [String: String] ?? [:]
         reloadLogos()
         reloadTemplates()
@@ -342,7 +369,6 @@ final class AppState: ObservableObject {
     /// 把所有可调参数恢复成默认值。用户输入的文字内容（署名、自定义文字、手填的拍摄信息）和照片列表不动。
     func resetToDefaults() {
         options = RenderOptions(
-            logoColor: Self.defaultLogoColor,
             author: options.author, customText: options.customText, fieldOverrides: options.fieldOverrides
         )
         lineOverrides = [:]
@@ -388,6 +414,7 @@ final class AppState: ObservableObject {
     // MARK: - 预览
 
     private func reloadSelectedSources() {
+        scheduleFullResolution()
         sourceTask?.cancel()
         previewSource = nil
         thumbnailSource = nil
@@ -408,7 +435,42 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// 100% 查看时，按当前照片和设置重新渲染原图分辨率的成品；不在 100% 查看时释放它。
+    /// 预览分两步：参数一变先出快速预览（长边约 2000 像素，拖滑块也跟得上），
+    /// 停顿片刻后再按原图分辨率渲染一遍换上去，画质和导出的文件一致。
+    func scheduleFullResolution() {
+        fullResolutionTask?.cancel()
+        fullResolutionPreview = nil
+        guard let photo = selectedPhoto else {
+            fullResolutionSource = nil
+            return
+        }
+        if fullResolutionSource?.url != photo.url { fullResolutionSource = nil }
+        let cachedSource = fullResolutionSource?.image
+        let template = selectedTemplate
+        let currentOptions = effectiveOptions(forTemplate: template.id)
+        let currentLogo = logo(for: photo.metadata)
+        fullResolutionTask = Task {
+            try? await Task.sleep(for: Self.fullResolutionDelay)
+            guard !Task.isCancelled else { return }
+            let source: CGImage
+            if let cachedSource {
+                source = cachedSource
+            } else {
+                guard let loaded = await RenderJobs.loadImage(photo.url), !Task.isCancelled else { return }
+                fullResolutionSource = (photo.url, loaded)
+                source = loaded
+            }
+            let result = await RenderJobs.render(
+                image: source, metadata: photo.metadata, template: template, options: currentOptions, logo: currentLogo
+            )
+            guard !Task.isCancelled, selectedPhotoID == photo.id, case .success(let rendered) = result else { return }
+            fullResolutionPreview = rendered
+        }
+    }
+
     private func schedulePreview() {
+        scheduleFullResolution()
         previewTask?.cancel()
         guard let image = previewSource, let photo = selectedPhoto else { return }
         let template = selectedTemplate

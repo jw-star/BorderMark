@@ -48,6 +48,8 @@ struct InspectorView: View {
             exportBar
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear { FocusReset.clearAfterLayout() }
+        .onChange(of: tab) { FocusReset.clearAfterLayout() }
     }
 
     // MARK: - 顶部

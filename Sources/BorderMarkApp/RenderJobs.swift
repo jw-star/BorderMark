@@ -39,6 +39,11 @@ enum RenderJobs {
         }
     }
 
+    /// 按原始分辨率解码（已按 EXIF 方向摆正）
+    nonisolated static func loadImage(_ url: URL) async -> CGImage? {
+        try? ImageLoader.load(url: url)
+    }
+
     nonisolated static func loadImage(_ url: URL, maxPixelSize: Int) async -> CGImage? {
         try? ImageLoader.load(url: url, maxPixelSize: maxPixelSize)
     }

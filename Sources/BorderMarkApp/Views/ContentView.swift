@@ -18,6 +18,13 @@ struct ContentView: View {
             InspectorView()
                 .frame(width: Self.inspectorWidth)
         }
+        .overlay {
+            if state.isFullScreenPreview {
+                FullScreenPreviewView()
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: state.isFullScreenPreview)
         .toolbar { toolbarContent }
         .dropDestination(for: URL.self) { urls, _ in
             state.importPhotos(urls)
@@ -49,6 +56,13 @@ struct ContentView: View {
                 Label("导入", systemImage: "plus")
             }
             .help("导入照片或文件夹（⌘O）")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button { state.enterFullScreenPreview() } label: {
+                Label("全屏预览", systemImage: "arrow.up.left.and.arrow.down.right")
+            }
+            .disabled(state.selectedPhoto == nil)
+            .help("全屏预览（空格）；方向键切换照片")
         }
     }
 }

@@ -8,6 +8,7 @@ struct PreviewView: View {
         VStack(spacing: 0) {
             ZStack {
                 Color(nsColor: .underPageBackgroundColor)
+                    .onTapGesture { FocusReset.clear() }
                 content
             }
             Divider()
@@ -17,13 +18,16 @@ struct PreviewView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let preview = state.preview {
+        if let preview = state.displayPreview {
             Image(decorative: preview, scale: 1)
                 .resizable()
                 .interpolation(.high)
                 .scaledToFit()
                 .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
                 .padding(28)
+                .onTapGesture(count: 2) { state.enterFullScreenPreview() }
+                .onTapGesture { FocusReset.clear() }
+                .help("双击或按空格全屏预览，方向键切换照片")
         } else if state.selectedPhoto != nil {
             ProgressView()
         } else {
@@ -56,9 +60,17 @@ struct PreviewView: View {
                 Text(resolver.resolve("{Params}") ?? "无拍摄参数，可在右侧手动填写")
                     .foregroundStyle(.secondary)
                 Spacer()
-                if let preview = state.preview {
-                    Text("预览 \(preview.width)×\(preview.height)")
+                if let preview = state.displayPreview {
+                    if state.isShowingFullResolution {
+                        Text("原图画质 \(preview.width)×\(preview.height)")
+                            .foregroundStyle(.tertiary)
+                    } else {
+                        HStack(spacing: 5) {
+                            ProgressView().controlSize(.mini)
+                            Text("正在生成原图画质…")
+                        }
                         .foregroundStyle(.tertiary)
+                    }
                 }
             } else {
                 Text(state.selectedTemplate.name)
