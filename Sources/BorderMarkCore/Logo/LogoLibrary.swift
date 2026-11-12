@@ -111,7 +111,7 @@ public enum LogoLibrary {
                 result[entry.id] = entry
             }
         }
-        return byID.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        return byID.values.sorted { nameAscending($0.name, $1.name) }
     }
 
     public static func allEntries() -> [LogoEntry] {
@@ -126,12 +126,23 @@ public enum LogoLibrary {
                     switch (lhs.variant, rhs.variant) {
                     case (nil, _): return true
                     case (_, nil): return false
-                    case let (left?, right?): return left.localizedStandardCompare(right) == .orderedAscending
+                    case let (left?, right?): return nameAscending(left, right)
                     }
                 }
                 return LogoBrand(id: brandID, name: variants[0].brandName, variants: variants)
             }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            .sorted { nameAscending($0.name, $1.name) }
+    }
+
+    /// 按中文环境排序，避免 CI 和不同系统语言下样式顺序不一致。
+    private static let nameLocale = Locale(identifier: "zh_CN")
+
+    private static func nameAscending(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.compare(
+            rhs,
+            options: [.caseInsensitive, .numeric, .widthInsensitive, .forcedOrdering],
+            locale: nameLocale
+        ) == .orderedAscending
     }
 
     /// 按 EXIF 的厂商字段找品牌：厂商名以哪个品牌键开头就用哪个，多个命中取最长的。
